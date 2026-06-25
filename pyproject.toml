@@ -1,0 +1,50 @@
+[project]
+name = "tethys-uvx"
+version = "0.1.0"
+description = "Framework dependencies for the uv-built, salt-free, nginx-free Tethys base image (served by uvicorn)."
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    # --- Tethys platform / Django ---
+    "django>=4.2,<6",
+    "channels",
+    "channels-redis",
+    "django-bootstrap5",
+    "django-model-utils",
+    "django-guardian",
+    "social-auth-app-django<5.5",
+    "django-termsandconditions",
+    "django-cookie-consent",
+    "django-json-widget",
+    "djangorestframework",
+    "djangorestframework-simplejwt",
+
+    # --- web / server (ASGI) ---
+    "uvicorn[standard]",
+    "tornado>=6.5,<7",
+    "requests>=2.32.4,<3",
+    "urllib3<2",
+
+    # --- database ---
+    "psycopg2-binary",            # binary wheel avoids a build step
+    "sqlalchemy==1.*",
+
+    # --- security / build / config ---
+    "pyopenssl>=24.0.0",
+    "cryptography>=46.0.5",
+    "bcrypt",
+    "setuptools_scm",
+    "pip",
+    "pyyaml",
+    "jinja2",
+
+    # --- static/media storage (S3 via django-storages; used by portal_storage.py + media) ---
+    "django-storages",
+    "boto3",
+]
+
+# NOTE: the scientific/geo stack (numpy, scipy, pandas, geopandas, xarray, geoglows, ...) and the
+# Tethys apps (tethysdash, plugins) are NOT here -- they belong to the downstream portal image, which
+# builds FROM this base. Keeping them out keeps the base generic and reusable for any Tethys portal.
+
+[dependency-groups]
+dev = ["ruff"]
