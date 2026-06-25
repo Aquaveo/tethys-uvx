@@ -13,9 +13,6 @@ permissions:
   contents: read
   packages: write
 
-env:
-  IMAGE: ghcr.io/${{ github.repository_owner }}/tethys-uvx
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -37,6 +34,7 @@ jobs:
       - name: Compute tags
         id: tags
         run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/tethys-uvx"   # registry names must be lowercase
           SHA="${GITHUB_SHA::7}"
           TAGS="${IMAGE}:${{ matrix.target }},${IMAGE}:${{ matrix.target }}-${SHA}"
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
