@@ -35,6 +35,10 @@ ENV STATIC_ROOT="${TETHYS_PERSIST}/static" \
     WORKSPACE_ROOT="${TETHYS_PERSIST}/workspaces" \
     MEDIA_ROOT="${TETHYS_PERSIST}/media"
 
+# Framework Python modules (e.g. portal_storage) live here, on PYTHONPATH and OUTSIDE the venv, so a
+# downstream portal can override the whole venv without losing them.
+ENV PYTHONPATH="/opt/portal"
+
 ENV TETHYS_PORT=8000 \
     TETHYS_DB_ENGINE="django.db.backends.postgresql" \
     TETHYS_DB_NAME="tethys_platform" \
@@ -79,9 +83,11 @@ RUN uv python install 3.12 \
 RUN chmod -R a+rX /opt/python /opt/conda
 
 ###############################################################################
-# runtime - slim final image (no uv, no git, no gcc); a runnable no-apps Tethys
+# runtime-base - slim runtime WITHOUT the venv (OS + libs + user + scripts + config skeleton).
+# This is the foundation a portal builds on: FROM tethys-uvx:runtime-base, then COPY in the
+# app-augmented venv -- avoids shipping the base venv twice.
 ###############################################################################
-FROM base AS runtime
+FROM base AS runtime-base
 
 # runtime libs only: certs (outbound HTTPS), curl (healthcheck), postgresql-client (psql + libpq),
 # libexpat1 (some geo libs dlopen it; tiny -- kept so portal images don't need extra apt).
@@ -92,14 +98,14 @@ RUN apt-get update \
 # Non-root service user; --create-home makes /home/tethys owned by uid 1000.
 RUN useradd --uid 1000 --create-home --home-dir /home/tethys --shell /bin/bash tethys
 
-# The interpreter AND the venv, at the SAME paths (pyvenv.cfg hardcodes /opt/python).
-COPY --from=builder /opt/python /opt/python
-COPY --from=builder /opt/conda  /opt/conda
-
 # venv-activating entrypoint shim + the framework init/serve scripts
 RUN printf '#!/bin/bash\nexport VIRTUAL_ENV=%s\nexport PATH="${VIRTUAL_ENV}/bin:${PATH}"\nexport CONDA_PREFIX="${VIRTUAL_ENV}"\nexport LD_LIBRARY_PATH="${VIRTUAL_ENV}/lib:${LD_LIBRARY_PATH}"\nexec "$@"\n' "${VIRTUAL_ENV}" > /usr/local/bin/_entrypoint.sh \
   && chmod +x /usr/local/bin/_entrypoint.sh
 COPY --chmod=0755 scripts/*.sh /usr/local/bin/
+
+# Custom S3 static backend (tolerates Tethys' leading-slash static paths), on PYTHONPATH (/opt/portal)
+# so it survives a venv override; importable as portal_storage.PortalStaticS3Storage.
+COPY conf/portal_storage.py /opt/portal/portal_storage.py
 
 USER 1000:1000
 
@@ -113,10 +119,16 @@ COPY --chown=1000:1000 --from=builder ${TETHYS_HOME}/portal_config.yml ${TETHYS_
 # secrets/host at startup (PORTAL_CONFIG_SRC default /config/portal_config.yml). A portal image
 # OVERWRITES /config/portal_config.yml with its own (DB, branding, app settings).
 COPY --chown=1000:1000 conf/portal_config.yml /config/portal_config.yml
-# Custom S3 static backend (tolerates Tethys' leading-slash static paths); importable as
-# portal_storage.PortalStaticS3Storage.
-COPY --chown=1000:1000 conf/portal_storage.py /opt/conda/envs/tethys/lib/python3.12/site-packages/portal_storage.py
 
 VOLUME ["${TETHYS_PERSIST}", "${TETHYS_HOME}/keys"]
 WORKDIR ${TETHYS_HOME}
 CMD ["/usr/local/bin/start-uvicorn.sh"]
+
+###############################################################################
+# runtime - runtime-base + the no-apps venv: a standalone runnable Tethys
+###############################################################################
+FROM runtime-base AS runtime
+
+# The interpreter AND the venv, at the SAME paths (pyvenv.cfg hardcodes /opt/python).
+COPY --from=builder /opt/python /opt/python
+COPY --from=builder /opt/conda  /opt/conda

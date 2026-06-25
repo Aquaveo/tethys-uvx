@@ -10,7 +10,8 @@ add their own apps (e.g. tethysdash) and config.
 | Tag | What it is | Use |
 |---|---|---|
 | `ghcr.io/aquaveo/tethys-uvx:builder` | toolchain (uv + Node + gcc) + venv + Tethys + framework deps | a portal's **build** stage (build/install apps) |
-| `ghcr.io/aquaveo/tethys-uvx:runtime` | slim: venv + interpreter + runtime libs + scripts | a portal's **runtime** stage; also a runnable no-apps Tethys |
+| `ghcr.io/aquaveo/tethys-uvx:runtime-base` | slim runtime **without** the venv (libs + user + scripts) | a portal's **runtime** stage (COPY your venv onto it) |
+| `ghcr.io/aquaveo/tethys-uvx:runtime` | `runtime-base` + the no-apps venv | a runnable no-apps Tethys |
 
 Each also gets `<target>-<short-sha>` and, on a git tag, `<target>-<tag>`. **Pin** a specific tag in
 downstream portals so a base change can't silently break them.
@@ -29,7 +30,7 @@ FROM ghcr.io/aquaveo/tethys-uvx:builder AS builder
 # ... npm build + `uv pip install` your apps into ${VIRTUAL_ENV} ...
 
 # assemble onto the slim runtime
-FROM ghcr.io/aquaveo/tethys-uvx:runtime
+FROM ghcr.io/aquaveo/tethys-uvx:runtime-base
 COPY --from=builder /opt/python /opt/python
 COPY --from=builder /opt/conda  /opt/conda          # venv with your apps
 COPY --chown=1000:1000 conf/portal_config.yml /config/portal_config.yml   # your config/branding
