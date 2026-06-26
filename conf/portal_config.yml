@@ -22,11 +22,10 @@ settings:
       NAME: tethys_platform
       USER: tethys_default
       # PASSWORD/HOST/USER/PORT/NAME are injected by portal-config.sh from the task env/secrets.
+      # DISABLE_SERVER_SIDE_CURSORS is also set by portal-config.sh from TETHYS_DB_POOL_MODE
+      # (true for a transaction-mode pooler, false for direct Postgres) -- DB-platform agnostic.
       HOST: postgres
       PORT: 5432
-      # Required when going through a transaction-mode pooler (e.g. Supabase): server-side cursors
-      # and long-lived connections don't survive transaction pooling.
-      DISABLE_SERVER_SIDE_CURSORS: true
       CONN_MAX_AGE: 0
 
   CHANNEL_LAYERS:
