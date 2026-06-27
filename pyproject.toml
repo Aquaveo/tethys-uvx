@@ -20,6 +20,7 @@ dependencies = [
 
     # --- web / server (ASGI) ---
     "uvicorn[standard]",
+    "gunicorn",                   # optional process manager for uvicorn workers (SERVER=gunicorn)
     "tornado>=6.5,<7",
     "requests>=2.32.4,<3",
     "urllib3<2",

@@ -34,13 +34,13 @@ FROM ghcr.io/aquaveo/tethys-uvx:runtime-base
 COPY --from=builder /opt/python /opt/python
 COPY --from=builder /opt/conda  /opt/conda          # venv with your apps
 COPY --chown=1000:1000 conf/portal_config.yml /config/portal_config.yml   # your config/branding
-# CMD (start-uvicorn.sh) is inherited from the base
+# CMD (start-server.sh) is inherited from the base
 ```
 
 ## The scripts (baked into `/usr/local/bin`)
 `init-tethys.sh` orchestrates the salt-free init (run in an init container before the web tier):
 `wait-for-role` → `portal-config` → `db-migrations` → run-once(`configure-services`,
-`configure-tethysdash`, `publish-static`) → `portal-bootstrap`. `start-uvicorn.sh` renders the
+`configure-tethysdash`, `publish-static`) → `portal-bootstrap`. `start-server.sh` renders the
 config and serves the ASGI app. They're env-driven; see each script's header.
 
 ## CI
