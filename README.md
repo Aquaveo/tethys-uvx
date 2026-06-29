@@ -40,8 +40,21 @@ COPY --chown=1000:1000 conf/portal_config.yml /config/portal_config.yml   # your
 ## The scripts (baked into `/usr/local/bin`)
 `init-tethys.sh` orchestrates the salt-free init (run in an init container before the web tier):
 `wait-for-role` → `portal-config` → `db-migrations` → run-once(`configure-services`,
-`configure-tethysdash`, `publish-static`) → `portal-bootstrap`. `start-server.sh` renders the
-config and serves the ASGI app. They're env-driven; see each script's header.
+`configure-tethysdash`, `publish-static`) → `portal-bootstrap` → **portal `init.d` hooks**.
+`start-server.sh` renders the config and serves the ASGI app. They're env-driven; see each script's
+header.
+
+### Portal extensions (`init.d` hooks)
+After the portal is fully configured, `init-tethys.sh` runs every executable `*.sh` in
+`/opt/portal/init.d` (lexical order). This lets a portal add its own one-off setup — proxy apps,
+custom `manage.py` commands, seed data — **without modifying this base image**. A portal opts in from
+its own Dockerfile:
+```dockerfile
+COPY init.d/ /opt/portal/init.d/   # each script idempotent; the dir is optional (skipped if absent)
+```
+Hooks run in the init container, once per task start, *after* migrations and branding. Make each one
+idempotent (it re-runs every deploy); a hook that should fire only once per image version can wrap
+itself in `run-once.sh`.
 
 ## CI
 `.github/workflows/build.yml` builds both targets and pushes to GHCR on push to `main` / tags. The
