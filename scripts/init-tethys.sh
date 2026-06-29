@@ -35,4 +35,17 @@ set -euo pipefail
 
 /usr/local/bin/portal-bootstrap.sh      # superuser + `tethys site -f`
 
+# Portal-specific extensions: run any executable in /opt/portal/init.d, in lexical order, after the
+# portal is fully configured (migrations done, services/branding applied). Portals drop their own
+# scripts in via their Dockerfile (COPY init.d/ /opt/portal/init.d/) without touching this base
+# image. Each hook should be idempotent; a hook that must run once per image version can wrap itself
+# in run-once.sh.
+if [ -d /opt/portal/init.d ]; then
+  for hook in /opt/portal/init.d/*.sh; do
+    [ -e "$hook" ] || continue        # no-match glob guard when the dir is empty
+    echo "Running portal init hook: $(basename "$hook")"
+    bash "$hook"
+  done
+fi
+
 echo "Tethys init complete"
