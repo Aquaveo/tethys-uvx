@@ -28,12 +28,30 @@ set -euo pipefail
 # Reads the image DB env: TETHYS_DB_HOST/PORT/USERNAME/PASSWORD/NAME (NAME must be tethys_platform).
 #
 # Example:  run-once.sh tethysdash -- /usr/local/bin/configure-tethysdash.sh
-: "${TETHYS_DB_HOST:?}" "${TETHYS_DB_PORT:?}" "${TETHYS_DB_USERNAME:?}" "${TETHYS_DB_PASSWORD:?}" "${TETHYS_DB_NAME:?}"
+. /usr/local/bin/db-env.sh
 
 marker="${1:?usage: run-once.sh <marker> -- <command...>}"; shift
 [ "${1:-}" = "--" ] && shift
 [ "$#" -ge 1 ] || { echo "run-once: no command given" >&2; exit 2; }
 key="${marker}${INIT_VERSION:+@${INIT_VERSION}}"
+
+# sqlite: no psql / marker table -- record the marker as a file beside the DB. It sits on the same
+# mounted volume as the data, so "once" survives container replacement just as well.
+if [ "$DB_IS_SERVER" != 1 ]; then
+  mdir="$(dirname "$SQLITE_PATH")/.init_markers"; mkdir -p "$mdir"
+  mfile="$mdir/${key//\//_}"
+  if [ "${INIT_FORCE:-false}" = "true" ]; then
+    echo "run-once: INIT_FORCE=true -- running '${key}' regardless of marker"
+  elif [ -e "$mfile" ]; then
+    echo "run-once: '${key}' already done -- skipping"; exit 0
+  fi
+  echo "run-once: '${key}' -- running"; "$@"; : > "$mfile"
+  echo "run-once: '${key}' -- recorded"; exit 0
+fi
+
+# server DB (postgres): the marker table lives in tethys_platform (NAME must be tethys_platform), the
+# one store that survives task/instance replacement.
+: "${TETHYS_DB_HOST:?}" "${TETHYS_DB_PORT:?}" "${TETHYS_DB_USERNAME:?}" "${TETHYS_DB_PASSWORD:?}" "${TETHYS_DB_NAME:?}"
 
 psqlc() {
   PGPASSWORD="$TETHYS_DB_PASSWORD" psql -h "$TETHYS_DB_HOST" -p "$TETHYS_DB_PORT" \

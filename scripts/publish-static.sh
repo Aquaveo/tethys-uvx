@@ -13,8 +13,13 @@ set -euo pipefail
 #   - the tethysdash React bundle (baked at image build) -- already present
 #
 # 1) tethysdash plugin static -- MUST run before collectstatic so the plugin assets are gathered.
-SCRIPT_DIR="$(dirname "$(python -c 'import tethysapp.tethysdash as m; print(m.__file__)')")"
-( cd "$SCRIPT_DIR" && python collect_plugin_static.py )
+# Only when tethysdash is installed: a store-less / non-tethysdash portal (e.g. a sqlite local
+# portal) has no plugin static to gather and skips straight to collectstatic.
+if SCRIPT_DIR="$(python -c 'import tethysapp.tethysdash as m, os; print(os.path.dirname(m.__file__))' 2>/dev/null)"; then
+  ( cd "$SCRIPT_DIR" && python collect_plugin_static.py )
+else
+  echo "tethysdash not installed -- skipping plugin static collection."
+fi
 
 # 2) collect everything (platform + tethysdash bundle + ggst) -> uploaded to S3 by django-storages.
 tethys manage collectstatic --noinput

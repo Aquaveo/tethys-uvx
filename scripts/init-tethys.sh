@@ -9,16 +9,18 @@ set -euo pipefail
 # (provision.sh, as the database `postgres` admin). This script does everything the app role can do
 # against those already-created databases.
 #
-# DB-agnostic: connects to whatever Postgres TETHYS_DB_* points at (a transaction-mode pooler like
-# Supabase Supavisor / PgBouncer, or a plain Postgres / RDS). TETHYS_DB_POOL_MODE ("transaction" or
-# "direct", default direct) only controls DISABLE_SERVER_SIDE_CURSORS (set in portal-config.sh).
+# DB-agnostic: TETHYS_DB_ENGINE selects the backend (see db-env.sh). sqlite is a local file (no
+# server -- great for a single-container local portal); postgres is a networked DB reached over
+# TETHYS_DB_* (a transaction-mode pooler like Supabase Supavisor / PgBouncer, or a plain Postgres /
+# RDS). TETHYS_DB_POOL_MODE ("transaction" | "direct", default direct) only controls
+# DISABLE_SERVER_SIDE_CURSORS (set in portal-config.sh, Postgres-only).
 #
 # Order:
-#   0. wait-for-role        guard: app DB role usable (a plain `select 1`; instant on direct Postgres)
-#   1. portal-config        render portal_config.yml + inject secrets + DB host/port + cursor mode
+#   0. wait-for-role        guard: app DB role usable (postgres only; a no-op on sqlite)
+#   1. portal-config        render portal_config.yml + inject secrets + DB engine/host/port/name
 #   2. db-migrations        tethys db migrate  -> tethys_platform core schema
-#   3. configure-services   PostGIS Tethys service                       (was salt/tethys_services)
-#   4. configure-tethysdash link store + syncstores + plugin static      (was salt/tethysdash)
+#   3. configure-services   PostGIS Tethys service      (only if TETHYS_PS_CONNECTION set)
+#   4. configure-tethysdash link store + syncstores      (only if POSTGIS_SERVICE_NAME set)
 #   5. portal-bootstrap     portal superuser + site/branding
 
 # Every-deploy steps (idempotent): guard nothing — db-migrations MUST run so image upgrades apply
@@ -27,11 +29,17 @@ set -euo pipefail
 /usr/local/bin/portal-config.sh         # render config + DATABASES (HOST/PORT/USER + cursor mode)
 /usr/local/bin/db-migrations.sh         # core migrations
 
-# Once-per-image-version steps (structural/heavy) — guarded by a DB marker (run-once.sh). Bump
+# Once-per-image-version steps (structural/heavy) — guarded by a marker (run-once.sh). Bump
 # INIT_VERSION (set it to the image tag) to force these to re-run after an app/services change.
-/usr/local/bin/run-once.sh services   -- /usr/local/bin/configure-services.sh     # PostGIS
-/usr/local/bin/run-once.sh tethysdash -- /usr/local/bin/configure-tethysdash.sh   # link + syncstores
-/usr/local/bin/run-once.sh static     -- /usr/local/bin/publish-static.sh         # collect_plugin_static + collectstatic -> S3
+# The PostGIS persistent-store steps are Postgres-only, so they run only when a store is configured
+# (a sqlite / store-less portal has none and skips them cleanly).
+if [ -n "${TETHYS_PS_CONNECTION:-}" ]; then
+  /usr/local/bin/run-once.sh services   -- /usr/local/bin/configure-services.sh     # PostGIS
+fi
+if [ -n "${POSTGIS_SERVICE_NAME:-}" ]; then
+  /usr/local/bin/run-once.sh tethysdash -- /usr/local/bin/configure-tethysdash.sh   # link + syncstores
+fi
+/usr/local/bin/run-once.sh static     -- /usr/local/bin/publish-static.sh           # collectstatic (+ plugin static)
 
 /usr/local/bin/portal-bootstrap.sh      # superuser + `tethys site -f`
 
