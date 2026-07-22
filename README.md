@@ -37,6 +37,18 @@ COPY --chown=1000:1000 conf/portal_config.yml /config/portal_config.yml   # your
 # CMD (start-server.sh) is inherited from the base
 ```
 
+## Database backends
+`TETHYS_DB_ENGINE` selects the backend; the init/serve scripts branch on it via `db-env.sh`:
+
+| Engine | `TETHYS_DB_ENGINE` | Notes |
+|---|---|---|
+| **postgres** (default) | `django.db.backends.postgresql` | needs `TETHYS_DB_HOST/PORT/USERNAME/PASSWORD`; supports the pooler + PostGIS persistent stores |
+| **sqlite** | `django.db.backends.sqlite3` | a single file, no server — ideal for a **single-container local/dev portal**. `wait-for-role` is a no-op, `run-once` markers are files beside the DB, and the PostGIS persistent-store steps are skipped |
+
+For sqlite the DB file is `TETHYS_DB_NAME` (if absolute) or `${TETHYS_PERSIST}/tethys_platform.sqlite`
+— put `TETHYS_PERSIST` on a mounted volume so it persists. Persistent stores remain Postgres-only:
+an app that declares a `PersistentStoreDatabaseSetting` needs postgres.
+
 ## The scripts (baked into `/usr/local/bin`)
 `init-tethys.sh` orchestrates the salt-free init (run in an init container before the web tier):
 `wait-for-role` → `portal-config` → `db-migrations` → run-once(`configure-services`,

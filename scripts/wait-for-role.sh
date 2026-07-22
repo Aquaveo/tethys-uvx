@@ -10,6 +10,10 @@ set -euo pipefail
 # on the first bring-up (the role is cached forever after), so this is ~0s on normal deploys.
 # Probe GENTLY (a plain `select 1`): hammering can cache a bad role state in Supavisor.
 #
+# sqlite is a local file -- there's no server to wait for, so skip straight to migrations.
+. /usr/local/bin/db-env.sh
+[ "$DB_IS_SERVER" = 1 ] || { echo "sqlite: no DB server to wait for"; exit 0; }
+
 # Reads the image's DB env: TETHYS_DB_HOST / TETHYS_DB_PORT / TETHYS_DB_USERNAME / TETHYS_DB_PASSWORD
 # (TETHYS_DB_NAME optional; falls back to 'postgres' just for the probe).
 : "${TETHYS_DB_HOST:?}" "${TETHYS_DB_PORT:?}" "${TETHYS_DB_USERNAME:?}" "${TETHYS_DB_PASSWORD:?}"

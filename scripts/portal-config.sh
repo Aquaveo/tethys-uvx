@@ -19,6 +19,8 @@ export STATIC_ROOT="${STATIC_ROOT:-/home/tethys/persist/static}"
 export MEDIA_ROOT="${MEDIA_ROOT:-/home/tethys/persist/media}"
 export TETHYS_WORKSPACES_ROOT="${TETHYS_WORKSPACES_ROOT:-/home/tethys/persist/workspaces}"
 
+. /usr/local/bin/db-env.sh
+
 # Where the ConfigMap is mounted (see the configure initContainer volumeMount).
 PORTAL_CONFIG_SRC="${PORTAL_CONFIG_SRC:-/config/portal_config.yml}"
 
@@ -95,21 +97,21 @@ PY
 
 set_args=(
   --set SECRET_KEY "${TETHYS_SECRET_KEY:?TETHYS_SECRET_KEY is required (from tethys-secret)}"
-  --set DATABASES.default.PASSWORD "${TETHYS_DB_PASSWORD:?TETHYS_DB_PASSWORD is required (from tethys-db-app)}"
+  --set DATABASES.default.ENGINE "$TETHYS_DB_ENGINE"
 )
-if [ -n "${TETHYS_DB_HOST:-}" ]; then
-  set_args+=(--set DATABASES.default.HOST "$TETHYS_DB_HOST")
-fi
-# Supabase pooler (Supavisor) identifies the tenant from the username suffix: USER must be
-# "<role>.<project_ref>" (e.g. tethys_default.xxxx) or you get "no tenant identifier provided".
-if [ -n "${TETHYS_DB_USERNAME:-}" ]; then
-  set_args+=(--set DATABASES.default.USER "$TETHYS_DB_USERNAME")
-fi
-if [ -n "${TETHYS_DB_PORT:-}" ]; then
-  set_args+=(--set DATABASES.default.PORT "$TETHYS_DB_PORT")
-fi
-if [ -n "${TETHYS_DB_NAME:-}" ]; then
-  set_args+=(--set DATABASES.default.NAME "$TETHYS_DB_NAME")
+if [ "$DB_IS_SERVER" = 1 ]; then
+  set_args+=(--set DATABASES.default.PASSWORD "${TETHYS_DB_PASSWORD:?TETHYS_DB_PASSWORD is required (from tethys-db-app)}")
+  # Supabase pooler (Supavisor) identifies the tenant from the username suffix: USER must be
+  # "<role>.<project_ref>" (e.g. tethys_default.xxxx) or you get "no tenant identifier provided".
+  [ -n "${TETHYS_DB_HOST:-}" ]     && set_args+=(--set DATABASES.default.HOST "$TETHYS_DB_HOST")
+  [ -n "${TETHYS_DB_USERNAME:-}" ] && set_args+=(--set DATABASES.default.USER "$TETHYS_DB_USERNAME")
+  [ -n "${TETHYS_DB_PORT:-}" ]     && set_args+=(--set DATABASES.default.PORT "$TETHYS_DB_PORT")
+  [ -n "${TETHYS_DB_NAME:-}" ]     && set_args+=(--set DATABASES.default.NAME "$TETHYS_DB_NAME")
+else
+  # sqlite: one file under the persist volume. Only ENGINE + NAME matter (Django's sqlite backend
+  # ignores the host/user/password keys the skeleton carries).
+  mkdir -p "$(dirname "$SQLITE_PATH")"
+  set_args+=(--set DATABASES.default.NAME "$SQLITE_PATH")
 fi
 
 tethys settings "${set_args[@]}"
