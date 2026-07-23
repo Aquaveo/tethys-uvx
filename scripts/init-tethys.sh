@@ -39,7 +39,12 @@ fi
 if [ -n "${POSTGIS_SERVICE_NAME:-}" ]; then
   /usr/local/bin/run-once.sh tethysdash -- /usr/local/bin/configure-tethysdash.sh   # link + syncstores
 fi
-/usr/local/bin/run-once.sh static     -- /usr/local/bin/publish-static.sh           # collectstatic (+ plugin static)
+# Static publishing (collectstatic + plugin static) can be delegated to a separate
+# out-of-band / CI job instead of the init container. Toggle with RUN_STATIC
+# (default true): set RUN_STATIC=false to skip it here.
+if [ "${RUN_STATIC:-true}" = "true" ]; then
+  /usr/local/bin/run-once.sh static     -- /usr/local/bin/publish-static.sh         # collectstatic (+ plugin static)
+fi
 
 /usr/local/bin/portal-bootstrap.sh      # superuser + `tethys site -f`
 
