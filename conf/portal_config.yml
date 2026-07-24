@@ -1,17 +1,11 @@
-# Generic Tethys portal_config skeleton shipped in the base image at /config/portal_config.yml.
-#
-# scripts/portal-config.sh copies this into TETHYS_HOME at startup and injects the values that must
-# NOT live in a committed file (SECRET_KEY, DB password) plus the environment-specific DB host, the
-# task's own IP / extra ALLOWED_HOSTS, CSRF_TRUSTED_ORIGINS, and (when STATIC_S3_BUCKET is set) the
-# S3 static/media storage. A PORTAL IMAGE OVERWRITES this file with its own (DB, branding, app
-# settings) by COPYing over /config/portal_config.yml.
+# Tethys portal_config skeleton
 version: 2.0
 name:
 apps: {}
 settings:
   DEBUG: false
 
-  # Baseline only; portal-config.sh appends PORTAL_ALLOWED_HOSTS + the running task's private IP.
+  # Baseline; extended at runtime
   ALLOWED_HOSTS:
     - localhost
     - 127.0.0.1
@@ -21,25 +15,21 @@ settings:
       ENGINE: django.db.backends.postgresql
       NAME: tethys_platform
       USER: tethys_default
-      # PASSWORD/HOST/USER/PORT/NAME are injected by portal-config.sh from the task env/secrets.
-      # DISABLE_SERVER_SIDE_CURSORS is also set by portal-config.sh from TETHYS_DB_POOL_MODE
-      # (true for a transaction-mode pooler, false for direct Postgres) -- DB-platform agnostic.
+      # Injected at runtime
       HOST: postgres
       PORT: 5432
       CONN_MAX_AGE: 0
 
   CHANNEL_LAYERS:
     default:
-      # In-memory layer: no external Redis/valkey. Fine when websockets / cross-process channel
-      # messaging are not used. Override in the portal config if you need a shared channel layer.
+      # In-memory layer
       BACKEND: channels.layers.InMemoryChannelLayer
 
   TETHYS_PORTAL_CONFIG:
     ENABLE_OPEN_PORTAL: true
     BYPASS_TETHYS_HOME_PAGE: true
 
-# Site / branding content, applied to the DB by `tethys site -f` in portal-bootstrap.sh.
-# Empty entries are skipped; a portal image fills these in.
+# Site / branding content
 site_settings:
   GENERAL_SETTINGS:
     SITE_TITLE:
