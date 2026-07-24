@@ -62,19 +62,10 @@ for h in extra:
 if csrf:
     s["CSRF_TRUSTED_ORIGINS"] = csrf
 
-# trust forwarded proto (behind TLS proxy)
-s["SECURE_PROXY_SSL_HEADER"] = ["HTTP_X_FORWARDED_PROTO", "https"]
-
-# transaction pooler: disable server-side cursors
-pool_mode = os.environ.get("TETHYS_DB_POOL_MODE", "direct")
-db = s.setdefault("DATABASES", {}).setdefault("default", {})
-db["DISABLE_SERVER_SIDE_CURSORS"] = (pool_mode == "transaction")
-
 with open(path, "w") as f:
     yaml.safe_dump(cfg, f, default_flow_style=False, sort_keys=False)
 print("ALLOWED_HOSTS =", hosts)
 print("CSRF_TRUSTED_ORIGINS =", csrf)
-print("DB pool mode =", pool_mode, "-> DISABLE_SERVER_SIDE_CURSORS =", db["DISABLE_SERVER_SIDE_CURSORS"])
 PY
 
 
