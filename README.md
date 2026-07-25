@@ -45,11 +45,12 @@ Each also gets `<target>-<short-sha>` and, on a git tag, `<target>-<tag>`. **Pin
 downstream portals so a base change can't silently break them.
 
 ## What's in vs out
-- **In (base):** Tethys platform, Django, channels, uvicorn/gunicorn, DRF, psycopg2-binary,
-  django-storages + boto3, the custom S3 static backend (`portal_storage.py`), the init/serve scripts,
-  a generic `portal_config.yml` skeleton at `/config/portal_config.yml`.
-- **Out (portal layer):** the scientific/geo stack, tethysdash/GEOGLOWS/other apps, plugins, and the
-  portal-specific `portal_config.yml` / branding / app settings.
+- **In (base):** Tethys platform, Django, channels, uvicorn/gunicorn, DRF, psycopg2-binary, the
+  init/serve scripts, a generic `portal_config.yml` skeleton at `/config/portal_config.yml`.
+- **Out (portal layer):** the scientific/geo stack, tethysdash/GEOGLOWS/other apps, plugins, the
+  portal-specific `portal_config.yml` / branding / app settings, **and storage** — a portal that
+  wants S3/object storage brings its own `django-storages` + `boto3` + storage backend module and
+  declares `STORAGES` (see `portal-config.d`). The base configures no storage.
 
 ## Using it in a portal image
 ```dockerfile
@@ -114,9 +115,10 @@ Each script is idempotent; both dirs are optional (skipped if absent).
 ## conf/
 - `portal_config.yml` — generic skeleton shipped at `/config/portal_config.yml`; **a portal image
   overwrites it** with its own (DB, branding, app settings, `STORAGES`, `SECURE_PROXY_SSL_HEADER`).
-- `portal_storage.py` — `PortalStaticS3Storage`: strips a leading slash so Tethys's leading-slash
-  static paths resolve as S3 keys. A generic **enabler** kept in the base (on `PYTHONPATH`) for any
-  S3-using portal to reference from its own `STORAGES`; the base itself configures no storage.
+
+Storage is portal-owned: `PYTHONPATH=/opt/portal` is available for a portal to drop in a storage
+backend module (e.g. a leading-slash-tolerant `PortalStaticS3Storage`), but the base ships neither the
+module nor `django-storages`/`boto3`.
 
 ## CI
 `.github/workflows/build.yml` builds the targets and pushes to GHCR on push to `main` / tags. The

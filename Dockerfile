@@ -35,8 +35,8 @@ ENV STATIC_ROOT="${TETHYS_PERSIST}/static" \
     WORKSPACE_ROOT="${TETHYS_PERSIST}/workspaces" \
     MEDIA_ROOT="${TETHYS_PERSIST}/media"
 
-# Framework Python modules (e.g. portal_storage) live here, on PYTHONPATH and OUTSIDE the venv, so a
-# downstream portal can override the whole venv without losing them.
+# Portal-provided Python modules go here, on PYTHONPATH and OUTSIDE the venv, so a downstream portal
+# can drop in modules (e.g. a storage backend) that survive a venv override.
 ENV PYTHONPATH="/opt/portal"
 
 ENV TETHYS_PORT=8000 \
@@ -102,10 +102,6 @@ RUN useradd --uid 1000 --create-home --home-dir /home/tethys --shell /bin/bash t
 RUN printf '#!/bin/bash\nexport VIRTUAL_ENV=%s\nexport PATH="${VIRTUAL_ENV}/bin:${PATH}"\nexport CONDA_PREFIX="${VIRTUAL_ENV}"\nexport LD_LIBRARY_PATH="${VIRTUAL_ENV}/lib:${LD_LIBRARY_PATH}"\nexec "$@"\n' "${VIRTUAL_ENV}" > /usr/local/bin/_entrypoint.sh \
   && chmod +x /usr/local/bin/_entrypoint.sh
 COPY --chmod=0755 scripts/*.sh /usr/local/bin/
-
-# Custom S3 static backend (tolerates Tethys' leading-slash static paths), on PYTHONPATH (/opt/portal)
-# so it survives a venv override; importable as portal_storage.PortalStaticS3Storage.
-COPY conf/portal_storage.py /opt/portal/portal_storage.py
 
 USER 1000:1000
 

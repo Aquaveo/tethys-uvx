@@ -37,10 +37,6 @@ dependencies = [
     "pip",
     "pyyaml",
     "jinja2",
-
-    # --- static/media storage (S3 via django-storages; used by portal_storage.py + media) ---
-    "django-storages",
-    "boto3",
 ]
 
 # NOTE: the scientific/geo stack (numpy, scipy, pandas, geopandas, xarray, geoglows, ...) and the
