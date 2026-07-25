@@ -1,21 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
-#
-# wait-for-role.sh — gentle guard: block until the app DB role can authenticate before the init
-# runs migrations. Run FIRST in the init flow (before db-migrations.sh).
-#
-# WHY: the app role (tethys_default) is created PRE-ECS by the DB-provisioning repo (provision.sh).
-# Supabase's pooler (Supavisor) syncs new roles lazily, so the very first login as that role can
-# fail with "password authentication failed" for tens of seconds after creation. It only ever waits
-# on the first bring-up (the role is cached forever after), so this is ~0s on normal deploys.
-# Probe GENTLY (a plain `select 1`): hammering can cache a bad role state in Supavisor.
-#
-# sqlite is a local file -- there's no server to wait for, so skip straight to migrations.
+# Wait for DB role to authenticate
 . /usr/local/bin/db-env.sh
 [ "$DB_IS_SERVER" = 1 ] || { echo "sqlite: no DB server to wait for"; exit 0; }
 
-# Reads the image's DB env: TETHYS_DB_HOST / TETHYS_DB_PORT / TETHYS_DB_USERNAME / TETHYS_DB_PASSWORD
-# (TETHYS_DB_NAME optional; falls back to 'postgres' just for the probe).
 : "${TETHYS_DB_HOST:?}" "${TETHYS_DB_PORT:?}" "${TETHYS_DB_USERNAME:?}" "${TETHYS_DB_PASSWORD:?}"
 db="${TETHYS_DB_NAME:-postgres}"
 max="${MAX_TRIES:-30}"; delay="${DELAY:-4}"
