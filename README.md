@@ -28,10 +28,11 @@ and config.
    `portal_config.yml`: `DEBUG: true` → the Django dev server (`tethys manage start`, serves `/static/`
    locally, no CDN); otherwise the production ASGI server (uvicorn, or gunicorn if `SERVER=gunicorn`).
 
-> **In transition:** `SECURE_PROXY_SSL_HEADER`, cursor mode, and `STORAGES` are now portal-owned
-> (declared in each portal's `portal_config.yml` / rendered config, or via a `portal-config.d` hook).
-> Still bundled here pending a coordinated change: the ECS host-IP merge in `portal-config.sh` and the
-> `RUN_STATIC`/provisioning steps in `init-tethys.sh`.
+> **In transition:** `SECURE_PROXY_SSL_HEADER`, cursor mode, `STORAGES`, and any deployment-specific
+> host discovery (e.g. an ECS task IP) are now portal-owned — declared in each portal's config or added
+> via a `portal-config.d` hook. `portal-config.sh` keeps only the generic `PORTAL_ALLOWED_HOSTS` env
+> merge (the deploy provides the hosts; k8s does so via a pod-IP `fieldRef`). Still bundled here
+> pending the last coordinated change: the `RUN_STATIC`/provisioning steps in `init-tethys.sh` (Phase 4).
 
 ## Image targets (published to GHCR)
 
@@ -82,9 +83,10 @@ Comments in the scripts are intentionally terse; this is the reference.
 **Serving (runs in the web container):**
 - `start-server.sh` — the image `CMD`. Runs `portal-config.sh`, then serves: `DEBUG: true` → dev
   server; else uvicorn (or gunicorn via `SERVER=gunicorn`). Does no provisioning.
-- `portal-config.sh` — copies `/config/portal_config.yml` into `TETHYS_HOME`, injects `SECRET_KEY` +
-  DB password/host/user/port/name, then runs any `/opt/portal/portal-config.d/*.sh` (portal-owned
-  config extensions, e.g. `STORAGES`). Idempotent; no DB writes. (Still merges hosts in transition.)
+- `portal-config.sh` — copies `/config/portal_config.yml` into `TETHYS_HOME`, merges the
+  `PORTAL_ALLOWED_HOSTS` env into `ALLOWED_HOSTS`/`CSRF`, injects `SECRET_KEY` + DB connection, then
+  runs any `/opt/portal/portal-config.d/*.sh` (portal-owned config, e.g. `STORAGES`, host discovery).
+  Idempotent; no DB writes.
 - `db-env.sh` — sourced helper; sets `DB_IS_SERVER` / `SQLITE_PATH` from `TETHYS_DB_ENGINE`.
 
 **Provisioning (invoked by the deploy pipeline / an init job, NOT the web container):**

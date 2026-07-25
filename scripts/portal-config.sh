@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Render portal_config: copy + inject secrets/DB/hosts/storage.
+# Render portal_config: copy + merge hosts + inject secrets/DB + run hooks.
 
 export TETHYS_HOME="${TETHYS_HOME:-/home/tethys/portal}"
 export TETHYS_PERSIST="${TETHYS_PERSIST:-/home/tethys/persist}"
@@ -18,19 +18,8 @@ mkdir -p "$TETHYS_HOME"
 echo "Applying portal config from $PORTAL_CONFIG_SRC"
 cp "$PORTAL_CONFIG_SRC" "$TETHYS_HOME/portal_config.yml"
 
-# ECS-only: this task's private IP
-TASK_IP=""
-if [ -n "${ECS_CONTAINER_METADATA_URI_V4:-}" ]; then
-  TASK_IP="$(curl -s --max-time 3 "${ECS_CONTAINER_METADATA_URI_V4}/task" \
-    | python -c 'import sys,json
-try:
-    d=json.load(sys.stdin)
-    ips=[a for c in d.get("Containers",[]) for n in c.get("Networks",[]) for a in n.get("IPv4Addresses",[])]
-    print(ips[0] if ips else "")
-except Exception:
-    print("")' 2>/dev/null || true)"
-fi
-PORTAL_ALLOWED_HOSTS="${PORTAL_ALLOWED_HOSTS:-}" TASK_IP="$TASK_IP" \
+# merge PORTAL_ALLOWED_HOSTS env -> ALLOWED_HOSTS + CSRF
+PORTAL_ALLOWED_HOSTS="${PORTAL_ALLOWED_HOSTS:-}" \
   python - "$TETHYS_HOME/portal_config.yml" <<'PY'
 import os, re, sys, yaml
 path = sys.argv[1]
@@ -39,17 +28,12 @@ with open(path) as f:
 s = cfg.setdefault("settings", {})
 extra = [h.strip() for h in os.environ.get("PORTAL_ALLOWED_HOSTS", "").split(",") if h.strip()]
 
-# ALLOWED_HOSTS: baseline + env + task IP
 hosts = list(s.get("ALLOWED_HOSTS") or [])
 for h in extra:
     if h not in hosts:
         hosts.append(h)
-ip = os.environ.get("TASK_IP", "").strip()
-if ip and ip not in hosts:
-    hosts.append(ip)
 s["ALLOWED_HOSTS"] = hosts
 
-# CSRF_TRUSTED_ORIGINS: https origin per real domain
 def is_ip(h):
     return bool(re.match(r"^\d{1,3}(\.\d{1,3}){3}$", h))
 csrf = list(s.get("CSRF_TRUSTED_ORIGINS") or [])
@@ -67,7 +51,6 @@ with open(path, "w") as f:
 print("ALLOWED_HOSTS =", hosts)
 print("CSRF_TRUSTED_ORIGINS =", csrf)
 PY
-
 
 # secrets + DB connection (from env)
 set_args=(
