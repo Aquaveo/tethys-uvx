@@ -12,11 +12,6 @@ if [ -n "${TETHYS_PS_CONNECTION:-}" ]; then
   /usr/local/bin/run-once.sh services -- /usr/local/bin/configure-services.sh
 fi
 
-# static publish (once per version)
-if [ "${RUN_STATIC:-true}" = "true" ]; then
-  /usr/local/bin/run-once.sh static -- /usr/local/bin/publish-static.sh
-fi
-
 /usr/local/bin/portal-bootstrap.sh
 
 # portal-specific hooks

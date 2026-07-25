@@ -28,11 +28,10 @@ and config.
    `portal_config.yml`: `DEBUG: true` → the Django dev server (`tethys manage start`, serves `/static/`
    locally, no CDN); otherwise the production ASGI server (uvicorn, or gunicorn if `SERVER=gunicorn`).
 
-> **In transition:** `SECURE_PROXY_SSL_HEADER`, cursor mode, `STORAGES`, and any deployment-specific
-> host discovery (e.g. an ECS task IP) are now portal-owned — declared in each portal's config or added
-> via a `portal-config.d` hook. `portal-config.sh` keeps only the generic `PORTAL_ALLOWED_HOSTS` env
-> merge (the deploy provides the hosts; k8s does so via a pod-IP `fieldRef`). Still bundled here
-> pending the last coordinated change: the `RUN_STATIC`/provisioning steps in `init-tethys.sh` (Phase 4).
+> Storage, proxy/SSL, cursor mode, and deployment-specific host discovery are portal-owned (declared in
+> each portal's config or a `portal-config.d` hook). `portal-config.sh` keeps only the generic
+> `PORTAL_ALLOWED_HOSTS` env merge (k8s supplies the pod IP via a `fieldRef`). Static publishing is a
+> standalone `publish-static.sh` step the pipeline runs — no `RUN_STATIC`/`RUN_STORE_SETUP` flags.
 
 ## Image targets (published to GHCR)
 
@@ -90,9 +89,9 @@ Comments in the scripts are intentionally terse; this is the reference.
 - `db-env.sh` — sourced helper; sets `DB_IS_SERVER` / `SQLITE_PATH` from `TETHYS_DB_ENGINE`.
 
 **Provisioning (invoked by the deploy pipeline / an init job, NOT the web container):**
-- `init-tethys.sh` — the current init-container orchestrator: `wait-for-role` → `portal-config` →
-  `db-migrations` → run-once `configure-services` → run-once `publish-static` → `portal-bootstrap` →
-  portal `init.d` hooks.
+- `init-tethys.sh` — DB/config provisioning: `wait-for-role` → `portal-config` → `db-migrations` →
+  run-once `configure-services` → `portal-bootstrap` → portal `init.d` hooks. **No static** — the
+  pipeline runs `publish-static.sh` as its own step (see below).
 - `wait-for-role.sh` — blocks until the app DB role can authenticate (no-op on sqlite).
 - `db-migrations.sh` — `tethys db migrate`.
 - `configure-services.sh` — creates the PostGIS persistent-store service from `TETHYS_PS_CONNECTION`.
