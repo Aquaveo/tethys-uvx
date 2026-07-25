@@ -88,29 +88,13 @@ fi
 
 tethys settings "${set_args[@]}"
 
-# S3 static/media (only when configured)
-if [ -n "${STATIC_S3_BUCKET:-}" ]; then
-  loc="static"
-  s3_args=(
-    --set STORAGES.staticfiles.BACKEND "portal_storage.PortalStaticS3Storage"
-    --set STORAGES.staticfiles.OPTIONS.bucket_name "$STATIC_S3_BUCKET"
-    --set STORAGES.staticfiles.OPTIONS.region_name "${AWS_REGION:-us-east-1}"
-    --set STORAGES.staticfiles.OPTIONS.location "$loc"
-    --set STORAGES.staticfiles.OPTIONS.querystring_auth false
-    --set STORAGES.default.BACKEND "storages.backends.s3.S3Storage"
-    --set STORAGES.default.OPTIONS.bucket_name "$STATIC_S3_BUCKET"
-    --set STORAGES.default.OPTIONS.region_name "${AWS_REGION:-us-east-1}"
-    --set STORAGES.default.OPTIONS.location "media"
-    --set STORAGES.default.OPTIONS.querystring_auth false
-  )
-  if [ -n "${STATIC_CLOUDFRONT_DOMAIN:-}" ]; then
-    s3_args+=( --set STORAGES.staticfiles.OPTIONS.custom_domain "$STATIC_CLOUDFRONT_DOMAIN" )
-    s3_args+=( --set STATIC_URL "https://${STATIC_CLOUDFRONT_DOMAIN}/${loc}/" )
-    s3_args+=( --set STORAGES.default.OPTIONS.custom_domain "$STATIC_CLOUDFRONT_DOMAIN" )
-    s3_args+=( --set MEDIA_URL "https://${STATIC_CLOUDFRONT_DOMAIN}/media/" )
-  fi
-  tethys settings "${s3_args[@]}"
-  echo "S3 static+media configured: bucket=$STATIC_S3_BUCKET static=static/ media=media/ domain=${STATIC_CLOUDFRONT_DOMAIN:-<none>}"
+# portal-owned config hooks
+if [ -d /opt/portal/portal-config.d ]; then
+  for f in /opt/portal/portal-config.d/*.sh; do
+    [ -e "$f" ] || continue
+    echo "Running portal-config hook: $(basename "$f")"
+    bash "$f"
+  done
 fi
 
 echo "Tethys portal config applied."

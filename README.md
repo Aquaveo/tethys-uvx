@@ -28,10 +28,10 @@ and config.
    `portal_config.yml`: `DEBUG: true` → the Django dev server (`tethys manage start`, serves `/static/`
    locally, no CDN); otherwise the production ASGI server (uvicorn, or gunicorn if `SERVER=gunicorn`).
 
-> **In transition:** `init-tethys.sh` and `portal-config.sh` still bundle some provisioning +
-> deployment-specific injection (ECS host IP, S3/CloudFront `STORAGES`, `SECURE_PROXY_SSL_HEADER`,
-> `RUN_STATIC`). Those are being moved to the consumers' pipelines + declarative `portal_config.yml`
-> and will be removed here in a coordinated change across the consuming portals.
+> **In transition:** `SECURE_PROXY_SSL_HEADER`, cursor mode, and `STORAGES` are now portal-owned
+> (declared in each portal's `portal_config.yml` / rendered config, or via a `portal-config.d` hook).
+> Still bundled here pending a coordinated change: the ECS host-IP merge in `portal-config.sh` and the
+> `RUN_STATIC`/provisioning steps in `init-tethys.sh`.
 
 ## Image targets (published to GHCR)
 
@@ -81,9 +81,9 @@ Comments in the scripts are intentionally terse; this is the reference.
 **Serving (runs in the web container):**
 - `start-server.sh` — the image `CMD`. Runs `portal-config.sh`, then serves: `DEBUG: true` → dev
   server; else uvicorn (or gunicorn via `SERVER=gunicorn`). Does no provisioning.
-- `portal-config.sh` — copies `/config/portal_config.yml` into `TETHYS_HOME` and injects the values
-  that can't live in a committed file: `SECRET_KEY`, DB password/host/user/port/name, plus (in
-  transition) hosts, `SECURE_PROXY_SSL_HEADER`, and S3/CloudFront `STORAGES`. Idempotent; no DB writes.
+- `portal-config.sh` — copies `/config/portal_config.yml` into `TETHYS_HOME`, injects `SECRET_KEY` +
+  DB password/host/user/port/name, then runs any `/opt/portal/portal-config.d/*.sh` (portal-owned
+  config extensions, e.g. `STORAGES`). Idempotent; no DB writes. (Still merges hosts in transition.)
 - `db-env.sh` — sourced helper; sets `DB_IS_SERVER` / `SQLITE_PATH` from `TETHYS_DB_ENGINE`.
 
 **Provisioning (invoked by the deploy pipeline / an init job, NOT the web container):**
@@ -102,19 +102,21 @@ Comments in the scripts are intentionally terse; this is the reference.
 - `run-once.sh <marker> -- <cmd>` — run `<cmd>` once per `<marker>` (per `INIT_VERSION`), recording the
   marker in the DB (or a file for sqlite) so it survives container replacement.
 
-### Portal extensions (`init.d` hooks)
-`init-tethys.sh` runs every executable `*.sh` in `/opt/portal/init.d` (lexical order) after the portal
-is configured — a portal's opt-in for one-off setup without modifying this base:
-```dockerfile
-COPY init.d/ /opt/portal/init.d/   # each script idempotent; the dir is optional
-```
+### Portal extensions (two hook dirs, both opt-in, no base edits)
+- **`/opt/portal/portal-config.d/*.sh`** — run by `portal-config.sh` (so in **both** the provision
+  and web containers), for portal-owned **config** injection that needs deploy-time env, e.g.
+  `STORAGES` from a bucket var. `COPY conf/portal-config.d/ /opt/portal/portal-config.d/`.
+- **`/opt/portal/init.d/*.sh`** — run by `init-tethys.sh` (provisioning only), after migrations/
+  branding, for one-off setup (proxy apps, seed data). `COPY init.d/ /opt/portal/init.d/`.
+
+Each script is idempotent; both dirs are optional (skipped if absent).
 
 ## conf/
 - `portal_config.yml` — generic skeleton shipped at `/config/portal_config.yml`; **a portal image
-  overwrites it** with its own (DB, branding, app settings, and — going forward — `STORAGES` /
-  `SECURE_PROXY_SSL_HEADER`).
+  overwrites it** with its own (DB, branding, app settings, `STORAGES`, `SECURE_PROXY_SSL_HEADER`).
 - `portal_storage.py` — `PortalStaticS3Storage`: strips a leading slash so Tethys's leading-slash
-  static paths resolve as S3 keys. Used as the `staticfiles` backend when S3 is configured.
+  static paths resolve as S3 keys. A generic **enabler** kept in the base (on `PYTHONPATH`) for any
+  S3-using portal to reference from its own `STORAGES`; the base itself configures no storage.
 
 ## CI
 `.github/workflows/build.yml` builds the targets and pushes to GHCR on push to `main` / tags. The
