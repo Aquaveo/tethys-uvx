@@ -18,8 +18,8 @@ mkdir -p "$TETHYS_HOME"
 echo "Applying portal config from $PORTAL_CONFIG_SRC"
 cp "$PORTAL_CONFIG_SRC" "$TETHYS_HOME/portal_config.yml"
 
-# merge PORTAL_ALLOWED_HOSTS env -> ALLOWED_HOSTS + CSRF
-PORTAL_ALLOWED_HOSTS="${PORTAL_ALLOWED_HOSTS:-}" \
+# merge PORTAL_ALLOWED_HOSTS + TETHYS_DEBUG env into settings
+PORTAL_ALLOWED_HOSTS="${PORTAL_ALLOWED_HOSTS:-}" TETHYS_DEBUG="${TETHYS_DEBUG:-}" \
   python - "$TETHYS_HOME/portal_config.yml" <<'PY'
 import os, re, sys, yaml
 path = sys.argv[1]
@@ -27,6 +27,10 @@ with open(path) as f:
     cfg = yaml.safe_load(f) or {}
 s = cfg.setdefault("settings", {})
 extra = [h.strip() for h in os.environ.get("PORTAL_ALLOWED_HOSTS", "").split(",") if h.strip()]
+
+dbg = os.environ.get("TETHYS_DEBUG", "").strip().lower()
+if dbg:
+    s["DEBUG"] = dbg in ("1", "true", "yes", "on")
 
 hosts = list(s.get("ALLOWED_HOSTS") or [])
 for h in extra:

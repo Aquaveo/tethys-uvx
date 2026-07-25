@@ -27,6 +27,8 @@ and config.
 5. **Dev server follows `DEBUG`.** `start-server.sh` reads `settings.DEBUG` from the rendered
    `portal_config.yml`: `DEBUG: true` → the Django dev server (`tethys manage start`, serves `/static/`
    locally, no CDN); otherwise the production ASGI server (uvicorn, or gunicorn if `SERVER=gunicorn`).
+   Set `DEBUG` declaratively in the config, or override it per-run with the `TETHYS_DEBUG` env (useful
+   when the config is baked into the image, e.g. docker-compose dev) — `portal-config.sh` applies it.
 
 > Storage, proxy/SSL, cursor mode, and deployment-specific host discovery are portal-owned (declared in
 > each portal's config or a `portal-config.d` hook). `portal-config.sh` keeps only the generic
@@ -83,9 +85,9 @@ Comments in the scripts are intentionally terse; this is the reference.
 - `start-server.sh` — the image `CMD`. Runs `portal-config.sh`, then serves: `DEBUG: true` → dev
   server; else uvicorn (or gunicorn via `SERVER=gunicorn`). Does no provisioning.
 - `portal-config.sh` — copies `/config/portal_config.yml` into `TETHYS_HOME`, merges the
-  `PORTAL_ALLOWED_HOSTS` env into `ALLOWED_HOSTS`/`CSRF`, injects `SECRET_KEY` + DB connection, then
-  runs any `/opt/portal/portal-config.d/*.sh` (portal-owned config, e.g. `STORAGES`, host discovery).
-  Idempotent; no DB writes.
+  `PORTAL_ALLOWED_HOSTS` + `TETHYS_DEBUG` env into settings (`ALLOWED_HOSTS`/`CSRF`/`DEBUG`), injects
+  `SECRET_KEY` + DB connection, then runs any `/opt/portal/portal-config.d/*.sh` (portal-owned config,
+  e.g. `STORAGES`, host discovery, OAuth secrets). Idempotent; no DB writes.
 - `db-env.sh` — sourced helper; sets `DB_IS_SERVER` / `SQLITE_PATH` from `TETHYS_DB_ENGINE`.
 
 **Provisioning (invoked by the deploy pipeline / an init job, NOT the web container):**
