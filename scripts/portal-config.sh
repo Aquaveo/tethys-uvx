@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Render portal_config: copy + merge hosts + inject secrets/DB + run hooks.
+# render config + secrets/DB + hooks
 
 export TETHYS_HOME="${TETHYS_HOME:-/home/tethys/portal}"
 export TETHYS_PERSIST="${TETHYS_PERSIST:-/home/tethys/persist}"

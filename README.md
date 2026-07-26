@@ -11,7 +11,7 @@ and config.
 
 ## Design principles
 
-1. **The image builds and serves. Nothing else.** The serving entrypoint (`start-server.sh`) only
+1. **The image builds and serves. Nothing else.** The serving entrypoint (`serve.sh`) only
    renders config + injects secrets, then runs the server. It never migrates the DB, syncs stores,
    collects/publishes static, or discovers hosts.
 2. **Provisioning is pipeline work, not image work.** DB migrations, persistent-store creation +
@@ -24,7 +24,7 @@ and config.
 4. **No behavior flags.** No `RUN_STATIC` / `RUN_STORE_SETUP` / host-discovery switches. If the image
    doesn't do a thing, there's nothing to toggle. The one derived behavior is the server mode, and it
    follows an existing declarative setting (see below), not a dedicated flag.
-5. **Dev server follows `DEBUG`.** `start-server.sh` reads `settings.DEBUG` from the rendered
+5. **Dev server follows `DEBUG`.** `serve.sh` reads `settings.DEBUG` from the rendered
    `portal_config.yml`: `DEBUG: true` → the Django dev server (`tethys manage start`, serves `/static/`
    locally, no CDN); otherwise the production ASGI server (uvicorn, or gunicorn if `SERVER=gunicorn`).
    Set `DEBUG` declaratively in the config, or override it per-run with the `TETHYS_DEBUG` env (useful
@@ -63,7 +63,7 @@ FROM ghcr.io/aquaveo/tethys-uvx:runtime-base
 COPY --from=builder /opt/python /opt/python
 COPY --from=builder /opt/conda  /opt/conda                                # venv with your apps
 COPY --chown=1000:1000 conf/portal_config.yml /config/portal_config.yml   # your config/branding
-# CMD (start-server.sh) is inherited from the base
+# CMD (serve.sh) is inherited from the base
 ```
 
 ## Database backends
@@ -72,7 +72,7 @@ COPY --chown=1000:1000 conf/portal_config.yml /config/portal_config.yml   # your
 | Engine | `TETHYS_DB_ENGINE` | Notes |
 |---|---|---|
 | **postgres** (default) | `django.db.backends.postgresql` | needs `TETHYS_DB_HOST/PORT/USERNAME/PASSWORD`; supports poolers + PostGIS persistent stores |
-| **sqlite** | `django.db.backends.sqlite3` | one file, no server — ideal for a single-container local/dev portal. `wait-for-role` is a no-op; `run-once` markers are files beside the DB |
+| **sqlite** | `django.db.backends.sqlite3` | one file, no server — ideal for a single-container local/dev portal (the DB-role wait is skipped) |
 
 For sqlite the DB file is `TETHYS_DB_NAME` (if absolute) or `${TETHYS_PERSIST}/tethys_platform.sqlite`
 — keep `TETHYS_PERSIST` on a mounted volume. Persistent stores are Postgres-only.
@@ -82,7 +82,7 @@ For sqlite the DB file is `TETHYS_DB_NAME` (if absolute) or `${TETHYS_PERSIST}/t
 Comments in the scripts are intentionally terse; this is the reference.
 
 **Serving (runs in the web container):**
-- `start-server.sh` — the image `CMD`. Runs `portal-config.sh`, then serves: `DEBUG: true` → dev
+- `serve.sh` — the image `CMD`. Runs `portal-config.sh`, then serves: `DEBUG: true` → dev
   server; else uvicorn (or gunicorn via `SERVER=gunicorn`). Does no provisioning.
 - `portal-config.sh` — copies `/config/portal_config.yml` into `TETHYS_HOME`, merges the
   `PORTAL_ALLOWED_HOSTS` + `TETHYS_DEBUG` env into settings (`ALLOWED_HOSTS`/`CSRF`/`DEBUG`), injects
@@ -91,26 +91,18 @@ Comments in the scripts are intentionally terse; this is the reference.
 - `db-env.sh` — sourced helper; sets `DB_IS_SERVER` / `SQLITE_PATH` from `TETHYS_DB_ENGINE`.
 
 **Provisioning (invoked by the deploy pipeline / an init job, NOT the web container):**
-- `init-tethys.sh` — DB/config provisioning: `wait-for-role` → `portal-config` → `db-migrations` →
-  run-once `configure-services` → `portal-bootstrap` → portal `init.d` hooks. **No static** — the
-  pipeline runs `publish-static.sh` as its own step (see below).
-- `wait-for-role.sh` — blocks until the app DB role can authenticate (no-op on sqlite).
-- `db-migrations.sh` — `tethys db migrate`.
-- `configure-services.sh` — creates the PostGIS persistent-store service from `TETHYS_PS_CONNECTION`.
-- `provision-persistent-store.sh <app> <setting>` — generic, parameterized: create service → link →
-  `syncstores` for any app's store, with a least-privilege role. Use this instead of app-specific
-  scripts.
+- `provision.sh` — the one-shot **provision** verb (run once per release, never on web-pod creation).
+  In order: wait for the DB role → `portal-config` → `tethys db migrate` → create the PostGIS
+  persistent-store service (if `TETHYS_PS_CONNECTION`) → `publish-static` (skipped when `DEBUG` is true,
+  since dev serves static from runserver) → superuser + `tethys site -f` → portal `init.d` hooks.
 - `publish-static.sh` — collect (incl. tethysdash plugin static, if present) → `collectstatic`
-  (uploads to S3 when `STORAGES.staticfiles` is S3).
-- `portal-bootstrap.sh` — create the superuser + apply `site_settings` (branding) via `tethys site -f`.
-- `run-once.sh <marker> -- <cmd>` — run `<cmd>` once per `<marker>` (per `INIT_VERSION`), recording the
-  marker in the DB (or a file for sqlite) so it survives container replacement.
+  (uploads to S3 when `STORAGES.staticfiles` is S3). Called by `provision.sh`.
 
 ### Portal extensions (two hook dirs, both opt-in, no base edits)
 - **`/opt/portal/portal-config.d/*.sh`** — run by `portal-config.sh` (so in **both** the provision
   and web containers), for portal-owned **config** injection that needs deploy-time env, e.g.
   `STORAGES` from a bucket var. `COPY conf/portal-config.d/ /opt/portal/portal-config.d/`.
-- **`/opt/portal/init.d/*.sh`** — run by `init-tethys.sh` (provisioning only), after migrations/
+- **`/opt/portal/init.d/*.sh`** — run by `provision.sh` (provisioning only), after migrations/
   branding, for one-off setup (proxy apps, seed data). `COPY init.d/ /opt/portal/init.d/`.
 
 Each script is idempotent; both dirs are optional (skipped if absent).
