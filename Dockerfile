@@ -118,7 +118,7 @@ COPY --chown=1000:1000 conf/portal_config.yml /config/portal_config.yml
 
 VOLUME ["${TETHYS_PERSIST}", "${TETHYS_HOME}/keys"]
 WORKDIR ${TETHYS_HOME}
-CMD ["/usr/local/bin/start-server.sh"]
+CMD ["/usr/local/bin/serve.sh"]
 
 ###############################################################################
 # runtime - runtime-base + the no-apps venv: a standalone runnable Tethys
