@@ -3,13 +3,32 @@ set -euo pipefail
 
 # Provision verb: run once per release (see README).
 
-/usr/local/bin/wait-for-role.sh
-/usr/local/bin/portal-config.sh
-/usr/local/bin/db-migrations.sh
+. /usr/local/bin/db-env.sh
 
-# PostGIS persistent-store service (only if configured)
+# wait for the DB role
+if [ "$DB_IS_SERVER" = 1 ]; then
+  : "${TETHYS_DB_HOST:?}" "${TETHYS_DB_PORT:?}" "${TETHYS_DB_USERNAME:?}" "${TETHYS_DB_PASSWORD:?}"
+  db="${TETHYS_DB_NAME:-postgres}"; max="${MAX_TRIES:-30}"; delay="${DELAY:-4}"; ok=0
+  for i in $(seq 1 "$max"); do
+    if PGPASSWORD="$TETHYS_DB_PASSWORD" psql -h "$TETHYS_DB_HOST" -p "$TETHYS_DB_PORT" \
+         -U "$TETHYS_DB_USERNAME" -d "$db" -tAc 'select 1' >/dev/null 2>&1; then
+      echo "DB role authenticates (after $i attempt(s))"; ok=1; break
+    fi
+    echo "waiting for DB role... ($i/$max)"; sleep "$delay"
+  done
+  [ "$ok" = 1 ] || { echo "FATAL: DB role never became usable after $((max*delay))s" >&2; exit 1; }
+fi
+
+/usr/local/bin/portal-config.sh
+
+echo "Running database migrations"
+tethys db migrate
+
+# PostGIS persistent-store service (if configured)
 if [ -n "${TETHYS_PS_CONNECTION:-}" ]; then
-  /usr/local/bin/run-once.sh services -- /usr/local/bin/configure-services.sh
+  : "${POSTGIS_SERVICE_NAME:?}"
+  tethys services create persistent -n "$POSTGIS_SERVICE_NAME" -c "$TETHYS_PS_CONNECTION" \
+    || echo "  (service '$POSTGIS_SERVICE_NAME' may already exist)"
 fi
 
 # publish static (prod only; DEBUG skips)
@@ -20,7 +39,12 @@ if [ "$DEBUG" != "true" ]; then
   /usr/local/bin/publish-static.sh
 fi
 
-/usr/local/bin/portal-bootstrap.sh
+# superuser + site settings
+if [ "${CREATE_SUPERUSER:-true}" = "true" ]; then
+  tethys db createsuperuser --pn "${PORTAL_SUPERUSER_NAME:-admin}" \
+    --pp "${PORTAL_SUPERUSER_PASSWORD:-pass}" --pe "${PORTAL_SUPERUSER_EMAIL:-}"
+fi
+tethys site -f
 
 # portal hooks
 if [ -d /opt/portal/init.d ]; then

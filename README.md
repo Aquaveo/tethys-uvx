@@ -72,7 +72,7 @@ COPY --chown=1000:1000 conf/portal_config.yml /config/portal_config.yml   # your
 | Engine | `TETHYS_DB_ENGINE` | Notes |
 |---|---|---|
 | **postgres** (default) | `django.db.backends.postgresql` | needs `TETHYS_DB_HOST/PORT/USERNAME/PASSWORD`; supports poolers + PostGIS persistent stores |
-| **sqlite** | `django.db.backends.sqlite3` | one file, no server — ideal for a single-container local/dev portal. `wait-for-role` is a no-op; `run-once` markers are files beside the DB |
+| **sqlite** | `django.db.backends.sqlite3` | one file, no server — ideal for a single-container local/dev portal (the DB-role wait is skipped) |
 
 For sqlite the DB file is `TETHYS_DB_NAME` (if absolute) or `${TETHYS_PERSIST}/tethys_platform.sqlite`
 — keep `TETHYS_PERSIST` on a mounted volume. Persistent stores are Postgres-only.
@@ -91,18 +91,12 @@ Comments in the scripts are intentionally terse; this is the reference.
 - `db-env.sh` — sourced helper; sets `DB_IS_SERVER` / `SQLITE_PATH` from `TETHYS_DB_ENGINE`.
 
 **Provisioning (invoked by the deploy pipeline / an init job, NOT the web container):**
-- `provision.sh` — the one-shot **provision** verb (run once per release, never on web-pod creation):
-  `wait-for-role` → `portal-config` → `db-migrations` → run-once `configure-services` →
-  `publish-static` (skipped when `DEBUG` is true — dev serves static from runserver) →
-  `portal-bootstrap` → portal `init.d` hooks.
-- `wait-for-role.sh` — blocks until the app DB role can authenticate (no-op on sqlite).
-- `db-migrations.sh` — `tethys db migrate`.
-- `configure-services.sh` — creates the PostGIS persistent-store service from `TETHYS_PS_CONNECTION`.
+- `provision.sh` — the one-shot **provision** verb (run once per release, never on web-pod creation).
+  In order: wait for the DB role → `portal-config` → `tethys db migrate` → create the PostGIS
+  persistent-store service (if `TETHYS_PS_CONNECTION`) → `publish-static` (skipped when `DEBUG` is true,
+  since dev serves static from runserver) → superuser + `tethys site -f` → portal `init.d` hooks.
 - `publish-static.sh` — collect (incl. tethysdash plugin static, if present) → `collectstatic`
-  (uploads to S3 when `STORAGES.staticfiles` is S3).
-- `portal-bootstrap.sh` — create the superuser + apply `site_settings` (branding) via `tethys site -f`.
-- `run-once.sh <marker> -- <cmd>` — run `<cmd>` once per `<marker>` (per `INIT_VERSION`), recording the
-  marker in the DB (or a file for sqlite) so it survives container replacement.
+  (uploads to S3 when `STORAGES.staticfiles` is S3). Called by `provision.sh`.
 
 ### Portal extensions (two hook dirs, both opt-in, no base edits)
 - **`/opt/portal/portal-config.d/*.sh`** — run by `portal-config.sh` (so in **both** the provision
