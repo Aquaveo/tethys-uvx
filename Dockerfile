@@ -76,6 +76,7 @@ COPY pyproject.toml .
 RUN uv python install 3.12 \
   && uv venv "${VIRTUAL_ENV}" --python 3.12 \
   && uv pip install --no-cache "tethys-platform @ git+https://github.com/tethysplatform/tethys.git" \
+  && uv pip install --no-cache condorpy \
   && uv pip install --no-cache -r pyproject.toml \
   && tethys gen portal_config
 
