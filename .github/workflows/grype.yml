@@ -1,0 +1,50 @@
+name: security scan
+
+# Builds each image target and scans it with Grype so package CVEs surface here
+# instead of failing downstream repos that build on this base. only-fixed keeps
+# the report actionable (only CVEs that have a fix).
+#
+# Report-only for now (fail-build false): the image still carries a few fixable
+# Python-level Highs that are out of scope for a one-shot fix (urllib3 is pinned
+# <2, CPython's fix is a 3.14 beta, social-auth-core is handled separately).
+# Flip fail-build to true once that backlog is cleared to make this a hard gate.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  grype:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [builder, runtime]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build ${{ matrix.target }} (amd64, load)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: ${{ matrix.target }}
+          platforms: linux/amd64
+          load: true
+          tags: tethys-uvx:${{ matrix.target }}-scan
+          cache-from: type=gha,scope=${{ matrix.target }}
+
+      - name: Scan ${{ matrix.target }} with Grype
+        uses: anchore/scan-action@v7
+        with:
+          image: tethys-uvx:${{ matrix.target }}-scan
+          severity-cutoff: high
+          only-fixed: true
+          fail-build: false
+          output-format: table
