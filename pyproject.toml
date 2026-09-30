@@ -11,7 +11,7 @@ dependencies = [
     "django-bootstrap5",
     "django-model-utils",
     "django-guardian",
-    "social-auth-app-django<5.5",
+    "social-auth-app-django>=6.0,<7",
     "django-termsandconditions",
     "django-cookie-consent",
     "django-json-widget",
