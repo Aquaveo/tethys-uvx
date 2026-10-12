@@ -1,14 +1,5 @@
 name: security scan
 
-# Builds each image target and scans it with Grype so package CVEs surface here
-# instead of failing downstream repos that build on this base. only-fixed keeps
-# the report actionable (only CVEs that have a fix).
-#
-# Report-only for now (fail-build false): the image still carries a few fixable
-# Python-level Highs that are out of scope for a one-shot fix (urllib3 is pinned
-# <2, CPython's fix is a 3.14 beta, social-auth-core is handled separately).
-# Flip fail-build to true once that backlog is cleared to make this a hard gate.
-
 on:
   push:
     branches: [main]
