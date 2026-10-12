@@ -95,7 +95,6 @@ FROM base AS runtime-base
 # runtime libs only: certs (outbound HTTPS), curl (healthcheck), postgresql-client (psql + libpq),
 # libexpat1 (some geo libs dlopen it; tiny -- kept so portal images don't need extra apt).
 # The --only-upgrade pass patches CVE-carrying packages inherited from debian:trixie-slim
-# (no-op for any not present), so the shipped runtime does not depend on a fresh base tag.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl postgresql-client libexpat1 \
   && apt-get install -y --only-upgrade \
