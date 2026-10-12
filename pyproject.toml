@@ -11,7 +11,7 @@ dependencies = [
     "django-bootstrap5",
     "django-model-utils",
     "django-guardian",
-    "social-auth-app-django<5.5",
+    "social-auth-app-django>=6.0,<7",
     "django-termsandconditions",
     "django-cookie-consent",
     "django-json-widget",
@@ -23,7 +23,7 @@ dependencies = [
     "gunicorn",                   # optional process manager for uvicorn workers (SERVER=gunicorn)
     "tornado>=6.5,<7",
     "requests>=2.32.4,<3",
-    "urllib3<2",
+    "urllib3>=2.8.0,<3",
 
     # --- database ---
     "psycopg2-binary",            # binary wheel avoids a build step
