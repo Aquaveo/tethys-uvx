@@ -63,6 +63,8 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates git gcc libpq-dev curl gnupg \
   && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
   && apt-get install -y --no-install-recommends nodejs \
+  && apt-get install -y --only-upgrade \
+       libc6 libssh2-1 libpcre2-8-0 libsqlite3-0 perl gzip zlib1g \
   && rm -rf /var/lib/apt/lists/*
 
 ENV UV_PYTHON_PREFERENCE=only-managed \
@@ -92,8 +94,11 @@ FROM base AS runtime-base
 
 # runtime libs only: certs (outbound HTTPS), curl (healthcheck), postgresql-client (psql + libpq),
 # libexpat1 (some geo libs dlopen it; tiny -- kept so portal images don't need extra apt).
+# The --only-upgrade pass patches CVE-carrying packages inherited from debian:trixie-slim
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl postgresql-client libexpat1 \
+  && apt-get install -y --only-upgrade \
+       libc6 libssh2-1 libpcre2-8-0 libsqlite3-0 perl gzip zlib1g \
   && rm -rf /var/lib/apt/lists/*
 
 # Non-root service user; --create-home makes /home/tethys owned by uid 1000.
