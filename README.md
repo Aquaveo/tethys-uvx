@@ -98,6 +98,21 @@ Comments in the scripts are intentionally terse; this is the reference.
 - `publish-static.sh` — collect (incl. tethysdash plugin static, if present) → `collectstatic`
   (uploads to S3 when `STORAGES.staticfiles` is S3). Called by `provision.sh`.
 
+**Building (available in the `builder` image only):**
+- `build-db.sh <command> [args...]` — runs a command against a **throwaway sqlite DB**, for Tethys
+  commands that need a database at build time (Tethys touches the DB on every management command
+  except `migrate`). It points `${TETHYS_HOME}/portal_config.yml` at a temporary sqlite file, runs
+  `tethys db migrate`, runs the command, then restores the config and deletes the DB. The exit code is
+  the command's. Typical use is collecting static into the image to serve it with WhiteNoise:
+  ```dockerfile
+  COPY conf/portal_config.yml ${TETHYS_HOME}/portal_config.yml   # sets STATIC_ROOT: /opt/static
+  RUN build-db.sh publish-static.sh
+  ```
+  then `COPY --from=builder /opt/static /opt/static` in the runtime stage. Run several commands with
+  `build-db.sh sh -c '...'`. Nothing written to the DB survives the build.
+- `publish-static.sh` — also shipped in the builder, so `build-db.sh publish-static.sh` collects the
+  same files (incl. tethysdash plugin static) that provisioning would.
+
 ### Portal extensions (two hook dirs, both opt-in, no base edits)
 - **`/opt/portal/portal-config.d/*.sh`** — run by `portal-config.sh` (so in **both** the provision
   and web containers), for portal-owned **config** injection that needs deploy-time env, e.g.

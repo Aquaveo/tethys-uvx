@@ -85,6 +85,9 @@ RUN uv python install 3.12 \
 # world-readable so the venv works run as the non-root runtime user
 RUN chmod -R a+rX /opt/python /opt/conda
 
+# build-time tools: run Tethys commands (e.g. collectstatic) against a throwaway sqlite DB
+COPY --chmod=0755 scripts/build-db.sh scripts/publish-static.sh /usr/local/bin/
+
 ###############################################################################
 # runtime-base - slim runtime WITHOUT the venv (OS + libs + user + scripts + config skeleton).
 # This is the foundation a portal builds on: FROM tethys-uvx:runtime-base, then COPY in the
